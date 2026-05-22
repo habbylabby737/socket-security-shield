@@ -572,6 +572,48 @@
       box-shadow: 0 0 24px rgba(255, 255, 255, .24);
     }
 
+    .orbit-button {
+      position: relative;
+      min-width: 110px;
+      height: 44px;
+      overflow: hidden;
+      border-color: rgba(255, 255, 255, .58);
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, .36), rgba(255, 255, 255, .12) 42%, rgba(255, 45, 211, .24)),
+        linear-gradient(135deg, #ff39d1 0%, #b722d2 48%, #7439ff 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .58),
+        0 12px 34px rgba(255, 45, 211, .28),
+        0 0 36px rgba(255, 255, 255, .16);
+      font-size: 13px;
+      letter-spacing: .01em;
+      text-shadow: 0 1px 8px rgba(38, 0, 54, .42);
+    }
+
+    .orbit-button::before {
+      content: "";
+      position: absolute;
+      inset: -45% -70%;
+      background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .62) 50%, transparent 62%);
+      transform: translateX(-38%) rotate(8deg);
+      opacity: .58;
+      pointer-events: none;
+    }
+
+    .orbit-button:hover {
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, .44), rgba(255, 255, 255, .16) 42%, rgba(255, 45, 211, .3)),
+        linear-gradient(135deg, #ff51db 0%, #c526dc 48%, #8350ff 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .68),
+        0 14px 42px rgba(255, 45, 211, .36),
+        0 0 44px rgba(255, 255, 255, .2);
+    }
+
+    .orbit-button[aria-pressed="true"]::before {
+      animation: orbitShine 1.35s ease-in-out infinite;
+    }
+
     .control-group {
       display: grid;
       grid-template-columns: 52px 1fr 52px;
@@ -703,6 +745,15 @@
     @keyframes nodeFloat {
       to {
         transform: translate3d(calc(var(--x) + 20px), calc(var(--y) - 18px), calc(var(--z) + 34px));
+      }
+    }
+
+    @keyframes orbitShine {
+      from {
+        transform: translateX(-58%) rotate(8deg);
+      }
+      to {
+        transform: translateX(58%) rotate(8deg);
       }
     }
 
@@ -863,6 +914,7 @@
       <div class="control-actions">
         <button class="control-button" id="resetButton" type="button">Front</button>
         <button class="control-button" id="spinButton" type="button">Spin</button>
+        <button class="control-button orbit-button" id="orbitButton" type="button" aria-pressed="false">360 Orbit</button>
       </div>
 
       <div class="control-column">
@@ -933,6 +985,7 @@
       const rig = document.getElementById("rig");
       const resetButton = document.getElementById("resetButton");
       const spinButton = document.getElementById("spinButton");
+      const orbitButton = document.getElementById("orbitButton");
       const zoomRange = document.getElementById("zoomRange");
       const speedRange = document.getElementById("speedRange");
       const arcRange = document.getElementById("arcRange");
@@ -971,6 +1024,9 @@
         spinCurrent: 0,
         spinPhase: 0,
         spinArc: Number(arcRange.value),
+        orbiting: false,
+        orbitStartRy: 0,
+        orbitProgress: 0,
         lastX: 0,
         lastY: 0,
         lastTime: performance.now()
@@ -1003,7 +1059,7 @@
         state.spinSpeed = clamp(value, Number(speedRange.min), Number(speedRange.max)) / 100;
         speedRange.value = String(Math.round(state.spinSpeed * 100));
         updateReadouts();
-        if (!state.spinning) setSpinActive(true);
+        if (!state.spinning && !state.orbiting) setSpinActive(true);
       }
 
       function setArc(value) {
@@ -1026,8 +1082,10 @@
         if (event.target.closest(".controls")) return;
         state.dragging = true;
         state.spinning = false;
+        state.orbiting = false;
         spinButton.textContent = "Spin";
         spinButton.setAttribute("aria-pressed", "false");
+        updateOrbitButton();
         state.lastX = event.clientX;
         state.lastY = event.clientY;
         viewer.setPointerCapture(event.pointerId);
@@ -1116,6 +1174,9 @@
         state.targetRx = pose.rx;
         state.targetRy = pose.ry;
         state.spinPhase = 0;
+        state.orbiting = false;
+        state.orbitProgress = 0;
+        updateOrbitButton();
         state.velocityX = 0;
         state.velocityY = 0;
         setZoom(defaultZoom());
@@ -1126,6 +1187,9 @@
         spinButton.textContent = state.spinning ? "Pause" : "Spin";
         spinButton.setAttribute("aria-pressed", state.spinning ? "true" : "false");
         if (state.spinning) {
+          state.orbiting = false;
+          state.orbitProgress = 0;
+          updateOrbitButton();
           state.velocityX = 0;
           state.velocityY = 0;
           state.spinPhase = 0;
@@ -1137,7 +1201,50 @@
         setSpinActive(!state.spinning);
       }
 
+      function updateOrbitButton() {
+        orbitButton.textContent = state.orbiting ? "Stop 360" : "360 Orbit";
+        orbitButton.setAttribute("aria-pressed", state.orbiting ? "true" : "false");
+      }
+
+      function startOrbit360() {
+        const pose = defaultPose();
+        state.dragging = false;
+        state.spinning = false;
+        state.orbiting = true;
+        state.orbitStartRy = pose.ry;
+        state.orbitProgress = 0;
+        state.spinCurrent = Math.max(state.spinCurrent, state.spinSpeed * .72);
+        state.velocityX = 0;
+        state.velocityY = 0;
+        state.targetRx = pose.rx;
+        state.targetRy = pose.ry;
+        spinButton.textContent = "Spin";
+        spinButton.setAttribute("aria-pressed", "false");
+        updateOrbitButton();
+      }
+
+      function stopOrbit360() {
+        state.orbiting = false;
+        state.orbitProgress = 0;
+        state.spinning = false;
+        state.velocityX = 0;
+        state.velocityY = 0;
+        state.targetRy = state.ry;
+        spinButton.textContent = "Spin";
+        spinButton.setAttribute("aria-pressed", "false");
+        updateOrbitButton();
+      }
+
+      function toggleOrbit360() {
+        if (state.orbiting) {
+          stopOrbit360();
+        } else {
+          startOrbit360();
+        }
+      }
+
       let spinPointerHandled = false;
+      let orbitPointerHandled = false;
       resetButton.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1163,12 +1270,46 @@
         if (!spinPointerHandled) toggleSpin();
       });
 
+      orbitButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        orbitPointerHandled = true;
+        toggleOrbit360();
+        setTimeout(() => {
+          orbitPointerHandled = false;
+        }, 350);
+      });
+
+      orbitButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!orbitPointerHandled) toggleOrbit360();
+      });
+
       function animate() {
         const now = performance.now();
         const dt = Math.min(32, now - state.lastTime) / 16.67;
         state.lastTime = now;
 
-        if (!state.dragging && state.spinning) {
+        if (!state.dragging && state.orbiting) {
+          const pose = defaultPose();
+          const orbitSpeed = .00135 * clamp(state.spinSpeed, .42, 1.65);
+          state.spinCurrent += (state.spinSpeed - state.spinCurrent) * .045;
+          state.orbitProgress = Math.min(1, state.orbitProgress + orbitSpeed * (.76 + state.spinCurrent * .2) * dt);
+          const eased = state.orbitProgress < .5
+            ? 4 * state.orbitProgress * state.orbitProgress * state.orbitProgress
+            : 1 - Math.pow(-2 * state.orbitProgress + 2, 3) / 2;
+          const pitchWave = Math.sin(eased * Math.PI * 2) * 1.8;
+          state.targetRx += (clamp(pose.rx + pitchWave, -14, 8) - state.targetRx) * .08;
+          state.targetRy = state.orbitStartRy - eased * 360;
+          state.velocityX *= .82;
+          state.velocityY *= .82;
+
+          if (state.orbitProgress >= 1) {
+            state.orbiting = false;
+            updateOrbitButton();
+            setSpinActive(true);
+          }
+        } else if (!state.dragging && state.spinning) {
           const pose = defaultPose();
           const pitchWave = Math.sin(now * .0011) * 1.25 + Math.sin(now * .00047) * .7;
           const speedBreath = .88 + (Math.sin(now * .00052) + 1) * .05;
@@ -1202,7 +1343,8 @@
             rx: Number(state.rx.toFixed(2)),
             ry: Number(state.ry.toFixed(2)),
             zoom: Number(state.zoom.toFixed(0)),
-            spinning: state.spinning
+            spinning: state.spinning,
+            orbiting: state.orbiting
           };
         },
         setRotation(rx, ry) {
