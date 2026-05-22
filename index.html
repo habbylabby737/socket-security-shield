@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; manifest-src 'none'; worker-src 'none'; upgrade-insecure-requests">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Socket Security Shield</title>
   <style>
@@ -1336,25 +1338,6 @@
       updateReadouts();
       applyTransform();
       animate();
-
-      window.socketScene = {
-        getState() {
-          return {
-            rx: Number(state.rx.toFixed(2)),
-            ry: Number(state.ry.toFixed(2)),
-            zoom: Number(state.zoom.toFixed(0)),
-            spinning: state.spinning,
-            orbiting: state.orbiting
-          };
-        },
-        setRotation(rx, ry) {
-          state.targetRx = clamp(rx, -58, 32);
-          state.targetRy = ry;
-        },
-        reset() {
-          resetButton.click();
-        }
-      };
 
       const canvas = document.getElementById("sparkCanvas");
       const ctx = canvas.getContext("2d");

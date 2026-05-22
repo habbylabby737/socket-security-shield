@@ -1,0 +1,4 @@
+Contact: https://github.com/habbylabby737/socket-security-shield/issues
+Expires: 2027-05-22T05:00:00.000Z
+Preferred-Languages: en
+Canonical: https://habbylabby737.github.io/socket-security-shield/.well-known/security.txt
