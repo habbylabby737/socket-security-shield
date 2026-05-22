@@ -1,0 +1,1274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Socket Security Shield</title>
+  <style>
+    :root {
+      --magenta: #d80fb0;
+      --violet: #8d32d8;
+      --hot: #ff2cca;
+      --ink: #18051d;
+      --white: #fff;
+      --rx: -10deg;
+      --ry: -22deg;
+      --zoom: 0px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #130018;
+      color: var(--white);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      touch-action: none;
+    }
+
+    .viewer {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 72% 20%, rgba(255, 255, 255, .34), transparent 9%),
+        radial-gradient(circle at 15% 72%, rgba(255, 84, 207, .42), transparent 18%),
+        linear-gradient(120deg, #e111ad 0%, #c318c0 45%, #8733d6 100%);
+      perspective: 1200px;
+      cursor: grab;
+      isolation: isolate;
+    }
+
+    .viewer:active {
+      cursor: grabbing;
+    }
+
+    .glow-field,
+    .grid-field,
+    .beam-field,
+    #sparkCanvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    #sparkCanvas {
+      z-index: 4;
+      mix-blend-mode: screen;
+      opacity: .86;
+    }
+
+    .glow-field {
+      z-index: 0;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .34), transparent 15%),
+        radial-gradient(circle at 42% 52%, rgba(255, 255, 255, .2), transparent 28%),
+        radial-gradient(circle at 70% 55%, rgba(123, 28, 255, .42), transparent 28%);
+      filter: blur(8px);
+      transform: translateZ(-400px);
+    }
+
+    .grid-field {
+      z-index: 1;
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .42) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .38) 1px, transparent 1px);
+      background-size: 62px 62px;
+      transform: rotateX(64deg) translateY(33vh) scale(1.55);
+      transform-origin: bottom center;
+      mask-image: linear-gradient(to top, rgba(0, 0, 0, .95), transparent 75%);
+      animation: gridSlide 9s linear infinite;
+    }
+
+    .beam-field {
+      z-index: 2;
+      background:
+        conic-gradient(from 218deg at 47% 50%, transparent 0 12deg, rgba(255, 255, 255, .22) 14deg, transparent 20deg 78deg, rgba(255, 222, 255, .16) 80deg, transparent 86deg 360deg);
+      filter: blur(15px);
+      transform: scale(1.4);
+      animation: beamSweep 8s ease-in-out infinite alternate;
+      mix-blend-mode: screen;
+    }
+
+    .scene {
+      position: relative;
+      z-index: 3;
+      width: min(92vw, 1160px);
+      height: min(78vh, 660px);
+      transform-style: preserve-3d;
+      display: grid;
+      place-items: center;
+    }
+
+    .rig {
+      position: relative;
+      width: min(88vw, 980px);
+      height: min(56vw, 470px);
+      min-height: 320px;
+      transform-style: preserve-3d;
+      transform: translateZ(var(--zoom)) rotateX(var(--rx)) rotateY(var(--ry));
+      transition: transform .12s ease-out;
+    }
+
+    .halo-ring,
+    .data-ring,
+    .lockup,
+    .backplate,
+    .plinth,
+    .dependency-node,
+    .light-card {
+      position: absolute;
+      transform-style: preserve-3d;
+    }
+
+    .halo-ring {
+      left: 4%;
+      top: -10%;
+      width: 43%;
+      aspect-ratio: 1;
+      border: 1px solid rgba(255, 255, 255, .42);
+      border-radius: 50%;
+      box-shadow:
+        inset 0 0 48px rgba(255, 255, 255, .18),
+        0 0 64px rgba(255, 45, 211, .42);
+      transform: translateZ(-66px) rotateX(72deg) rotateZ(14deg);
+      animation: ringTurn 16s linear infinite;
+    }
+
+    .halo-ring::before,
+    .halo-ring::after {
+      content: "";
+      position: absolute;
+      inset: 9%;
+      border-radius: inherit;
+      border: 2px dashed rgba(255, 255, 255, .34);
+      box-shadow: 0 0 22px rgba(255, 255, 255, .18);
+    }
+
+    .halo-ring::after {
+      inset: -9%;
+      border-style: solid;
+      border-color: rgba(255, 41, 209, .22);
+      transform: translateZ(-20px) rotateZ(32deg);
+    }
+
+    .data-ring {
+      left: 35%;
+      top: 7%;
+      width: 56%;
+      height: 66%;
+      border: 1px solid rgba(255, 255, 255, .26);
+      border-radius: 999px;
+      transform: translateZ(-92px) rotateX(64deg) rotateZ(-10deg);
+      box-shadow: 0 0 46px rgba(255, 255, 255, .14);
+      opacity: .82;
+    }
+
+    .data-ring::before,
+    .data-ring::after {
+      content: "";
+      position: absolute;
+      inset: 12%;
+      border-radius: inherit;
+      border: 1px solid rgba(255, 255, 255, .22);
+    }
+
+    .data-ring::after {
+      inset: 27%;
+      border-color: rgba(255, 45, 211, .26);
+    }
+
+    .backplate {
+      left: 8%;
+      top: 2%;
+      width: 84%;
+      height: 80%;
+      border-radius: 34px;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .04) 36%, rgba(70, 0, 80, .22)),
+        linear-gradient(120deg, rgba(255, 255, 255, .16), transparent 42%);
+      border: 1px solid rgba(255, 255, 255, .28);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .38),
+        inset 0 -20px 44px rgba(50, 0, 62, .2),
+        0 36px 90px rgba(54, 0, 81, .28);
+      transform: translateZ(-118px) rotateX(3deg);
+      overflow: hidden;
+    }
+
+    .backplate::before {
+      content: "";
+      position: absolute;
+      inset: -35%;
+      background:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, .22) 0 2px, transparent 2px 38px),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, .14) 0 1px, transparent 1px 38px);
+      opacity: .22;
+      transform: rotate(16deg);
+    }
+
+    .backplate::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .28), transparent);
+      transform: translateX(-105%) skewX(-18deg);
+      animation: glassFlash 5.4s ease-in-out infinite;
+    }
+
+    .plinth {
+      left: 16%;
+      bottom: 0;
+      width: 73%;
+      height: 88px;
+      border-radius: 50%;
+      background:
+        radial-gradient(ellipse at center, rgba(255, 255, 255, .52), rgba(255, 255, 255, .1) 31%, transparent 66%),
+        radial-gradient(ellipse at center, rgba(255, 35, 205, .46), transparent 70%);
+      filter: blur(.2px);
+      transform: translateZ(-148px) rotateX(78deg);
+      opacity: .86;
+    }
+
+    .lockup {
+      left: 2%;
+      top: 3%;
+      width: 96%;
+      height: 78%;
+      transform: translateZ(74px);
+    }
+
+    .shield-stack {
+      position: absolute;
+      left: 2%;
+      top: 0;
+      width: 34%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transform: translateZ(78px) rotateY(-9deg) rotateX(2deg);
+      filter: drop-shadow(0 36px 40px rgba(60, 0, 70, .28));
+    }
+
+    .shield-layer {
+      position: absolute;
+      inset: 0;
+      transform: translateZ(var(--depth));
+      transform-style: preserve-3d;
+      overflow: visible;
+    }
+
+    .shield-layer path {
+      fill: var(--fill);
+      stroke: rgba(255, 255, 255, var(--stroke));
+      stroke-width: var(--strokeWidth);
+      vector-effect: non-scaling-stroke;
+    }
+
+    .shield-edge {
+      --fill: rgba(255, 215, 255, .5);
+      --stroke: .08;
+      --strokeWidth: 2;
+      filter: drop-shadow(0 4px 9px rgba(72, 0, 84, .18));
+    }
+
+    .shield-face {
+      --fill: #fff;
+      --stroke: .55;
+      --strokeWidth: 4;
+      filter:
+        drop-shadow(0 0 11px rgba(255, 255, 255, .46))
+        drop-shadow(0 20px 36px rgba(80, 0, 92, .22));
+    }
+
+    .shield-gloss {
+      position: absolute;
+      inset: 2% 0 10%;
+      pointer-events: none;
+      transform: translateZ(108px);
+      clip-path: polygon(50% 2%, 91% 16%, 91% 48%, 88% 64%, 80% 80%, 68% 92%, 50% 99%, 32% 92%, 20% 80%, 12% 64%, 9% 48%, 9% 16%);
+      background:
+        linear-gradient(118deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 26%),
+        radial-gradient(circle at 38% 17%, rgba(255, 255, 255, .62), transparent 24%);
+      opacity: .58;
+      mix-blend-mode: screen;
+    }
+
+    .bolt-cut,
+    .bolt-glow {
+      position: absolute;
+      inset: 0;
+      transform: translateZ(116px);
+      pointer-events: none;
+    }
+
+    .bolt-cut svg,
+    .bolt-glow svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .bolt-cut path {
+      fill: url(#boltGradient);
+      stroke: rgba(110, 0, 124, .18);
+      stroke-width: 5;
+      filter:
+        drop-shadow(0 1px 0 rgba(255, 255, 255, .34))
+        drop-shadow(0 8px 8px rgba(62, 0, 82, .28));
+    }
+
+    .bolt-glow {
+      transform: translateZ(121px);
+      opacity: .68;
+      filter: blur(7px);
+      mix-blend-mode: screen;
+      animation: boltPulse 1.9s ease-in-out infinite alternate;
+    }
+
+    .bolt-glow path {
+      fill: rgba(255, 37, 210, .74);
+    }
+
+    .wordmark {
+      position: absolute;
+      left: 37%;
+      top: 18%;
+      width: 60%;
+      transform-style: preserve-3d;
+      transform: translateZ(96px) rotateY(3deg);
+    }
+
+    .word-depth,
+    .domain-depth,
+    .word-front,
+    .domain-front {
+      position: absolute;
+      left: 0;
+      color: #fff;
+      line-height: .9;
+      white-space: nowrap;
+      letter-spacing: 0;
+      font-weight: 900;
+      transform-style: preserve-3d;
+      user-select: none;
+    }
+
+    .word-depth,
+    .word-front {
+      top: 0;
+      font-size: clamp(76px, 11vw, 154px);
+    }
+
+    .domain-depth,
+    .domain-front {
+      top: clamp(96px, 13vw, 174px);
+      left: 3px;
+      font-size: clamp(34px, 4.8vw, 68px);
+      font-weight: 850;
+      letter-spacing: .01em;
+    }
+
+    .word-depth,
+    .domain-depth {
+      color: rgba(255, 217, 255, .58);
+      text-shadow: 0 0 22px rgba(88, 0, 105, .32);
+    }
+
+    .word-front,
+    .domain-front {
+      color: #fff;
+      text-shadow:
+        0 1px 0 rgba(255, 255, 255, .36),
+        0 12px 23px rgba(64, 0, 83, .22),
+        0 0 23px rgba(255, 255, 255, .26);
+      transform: translateZ(70px);
+    }
+
+    .word-shine,
+    .domain-shine {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      background: linear-gradient(105deg, transparent 0 28%, rgba(255, 255, 255, .65) 42%, transparent 55% 100%);
+      transform: translateZ(74px) translateX(-120%);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      animation: wordFlash 4.8s ease-in-out infinite;
+    }
+
+    .word-shine {
+      top: 0;
+      height: clamp(72px, 10vw, 150px);
+      mask-image: linear-gradient(#000, #000);
+    }
+
+    .domain-shine {
+      top: clamp(96px, 13vw, 174px);
+      height: clamp(34px, 4.8vw, 68px);
+      animation-delay: .25s;
+    }
+
+    .light-card {
+      width: 166px;
+      height: 92px;
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, .06)),
+        linear-gradient(90deg, rgba(255, 36, 211, .22), rgba(126, 44, 226, .22));
+      border: 1px solid rgba(255, 255, 255, .28);
+      box-shadow:
+        0 0 30px rgba(255, 255, 255, .14),
+        inset 0 0 22px rgba(255, 255, 255, .12);
+      transform: translateZ(var(--z)) rotateY(var(--y)) rotateX(var(--x)) rotateZ(var(--r));
+      opacity: .62;
+      overflow: hidden;
+    }
+
+    .light-card::before {
+      content: "";
+      position: absolute;
+      inset: 16px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      border-radius: 13px;
+    }
+
+    .light-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 26% 34%, rgba(255, 255, 255, .75) 0 5px, transparent 6px),
+        radial-gradient(circle at 64% 58%, rgba(255, 255, 255, .48) 0 4px, transparent 5px),
+        linear-gradient(110deg, transparent, rgba(255, 255, 255, .24), transparent);
+    }
+
+    .card-a {
+      left: 70%;
+      top: 6%;
+      --z: -20px;
+      --x: 10deg;
+      --y: -35deg;
+      --r: 8deg;
+    }
+
+    .card-b {
+      left: 23%;
+      top: 76%;
+      --z: -6px;
+      --x: 62deg;
+      --y: 0deg;
+      --r: -12deg;
+      width: 205px;
+      height: 74px;
+      opacity: .5;
+    }
+
+    .dependency-node {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow:
+        0 0 0 8px rgba(255, 255, 255, .12),
+        0 0 30px rgba(255, 255, 255, .78),
+        0 0 54px rgba(255, 34, 213, .46);
+      transform: translate3d(var(--x), var(--y), var(--z));
+      animation: nodeFloat var(--speed) ease-in-out infinite alternate;
+    }
+
+    .dependency-node::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: var(--line);
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, .8), transparent);
+      transform: rotate(var(--angle));
+      transform-origin: left center;
+    }
+
+    .node-1 {
+      --x: 31vw;
+      --y: 54px;
+      --z: 20px;
+      --line: 130px;
+      --angle: 142deg;
+      --speed: 3.2s;
+    }
+
+    .node-2 {
+      --x: 77vw;
+      --y: 255px;
+      --z: -30px;
+      --line: 96px;
+      --angle: 204deg;
+      --speed: 4.1s;
+    }
+
+    .node-3 {
+      --x: 18vw;
+      --y: 362px;
+      --z: 40px;
+      --line: 128px;
+      --angle: -34deg;
+      --speed: 3.7s;
+    }
+
+    .controls {
+      position: fixed;
+      right: 22px;
+      bottom: 20px;
+      z-index: 6;
+      width: min(640px, calc(100vw - 44px));
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 12px;
+      align-items: stretch;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, .24);
+      border-radius: 8px;
+      background: rgba(34, 0, 45, .38);
+      box-shadow: 0 18px 50px rgba(37, 0, 54, .2);
+      backdrop-filter: blur(18px);
+    }
+
+    .control-actions {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .control-button {
+      min-width: 86px;
+      height: 36px;
+      border: 1px solid rgba(255, 255, 255, .36);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .12);
+      color: #fff;
+      font: 750 12px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+
+    .control-button:hover {
+      background: rgba(255, 255, 255, .2);
+    }
+
+    .control-button[aria-pressed="true"] {
+      background: rgba(255, 255, 255, .28);
+      box-shadow: 0 0 24px rgba(255, 255, 255, .24);
+    }
+
+    .control-group {
+      display: grid;
+      grid-template-columns: 52px 1fr 52px;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+      color: rgba(255, 255, 255, .84);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .control-group output {
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .control-column {
+      display: grid;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .quick-row,
+    .stepper-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .quick-button,
+    .step-button {
+      height: 28px;
+      border: 1px solid rgba(255, 255, 255, .26);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .1);
+      color: rgba(255, 255, 255, .92);
+      font: 750 11px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+
+    .quick-button {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .step-button {
+      width: 34px;
+      flex: 0 0 34px;
+    }
+
+    .quick-button:hover,
+    .step-button:hover {
+      background: rgba(255, 255, 255, .18);
+    }
+
+    .range-wrap {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    input[type="range"] {
+      accent-color: #fff;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .hint {
+      position: fixed;
+      left: 22px;
+      bottom: 26px;
+      z-index: 6;
+      color: rgba(255, 255, 255, .82);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .02em;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+      pointer-events: none;
+    }
+
+    @keyframes gridSlide {
+      to {
+        background-position: 0 62px, 62px 0;
+      }
+    }
+
+    @keyframes beamSweep {
+      from {
+        transform: rotate(-8deg) scale(1.35);
+        opacity: .58;
+      }
+      to {
+        transform: rotate(12deg) scale(1.5);
+        opacity: .92;
+      }
+    }
+
+    @keyframes ringTurn {
+      to {
+        transform: translateZ(-66px) rotateX(72deg) rotateZ(374deg);
+      }
+    }
+
+    @keyframes glassFlash {
+      48%, 100% {
+        transform: translateX(120%) skewX(-18deg);
+      }
+    }
+
+    @keyframes boltPulse {
+      from {
+        opacity: .36;
+      }
+      to {
+        opacity: .9;
+      }
+    }
+
+    @keyframes wordFlash {
+      0%, 42% {
+        transform: translateZ(74px) translateX(-120%) skewX(-12deg);
+      }
+      62%, 100% {
+        transform: translateZ(74px) translateX(140%) skewX(-12deg);
+      }
+    }
+
+    @keyframes nodeFloat {
+      to {
+        transform: translate3d(calc(var(--x) + 20px), calc(var(--y) - 18px), calc(var(--z) + 34px));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .scene {
+        width: 100vw;
+        height: 78vh;
+      }
+
+      .rig {
+        width: 92vw;
+        height: 68vh;
+        min-height: 470px;
+      }
+
+      .backplate {
+        left: 5%;
+        top: 8%;
+        width: 90%;
+        height: 76%;
+      }
+
+      .lockup {
+        left: 0;
+        width: 100%;
+      }
+
+      .shield-stack {
+        left: 28%;
+        top: -5%;
+        width: 45%;
+        height: 50%;
+      }
+
+      .wordmark {
+        left: 6%;
+        top: 48%;
+        width: 88%;
+        text-align: center;
+      }
+
+      .word-depth,
+      .word-front {
+        width: 100%;
+        font-size: clamp(70px, 19vw, 120px);
+      }
+
+      .domain-depth,
+      .domain-front {
+        width: 100%;
+        top: clamp(82px, 22vw, 130px);
+        font-size: clamp(32px, 9vw, 56px);
+      }
+
+      .halo-ring {
+        left: 17%;
+        top: -3%;
+        width: 68%;
+      }
+
+      .data-ring,
+      .card-a,
+      .card-b,
+      .node-1,
+      .node-2,
+      .node-3 {
+        opacity: .42;
+      }
+
+      .controls {
+        right: 12px;
+        left: 12px;
+        bottom: 12px;
+        width: auto;
+        grid-template-columns: 1fr;
+        justify-content: center;
+      }
+
+      .hint {
+        left: 14px;
+        bottom: 72px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="viewer" id="viewer" aria-label="Interactive 3D Socket logo sculpture">
+    <canvas id="sparkCanvas" aria-hidden="true"></canvas>
+    <div class="glow-field" aria-hidden="true"></div>
+    <div class="grid-field" aria-hidden="true"></div>
+    <div class="beam-field" aria-hidden="true"></div>
+
+    <section class="scene" aria-label="3D scene">
+      <div class="rig" id="rig">
+        <div class="plinth"></div>
+        <div class="halo-ring"></div>
+        <div class="data-ring"></div>
+        <div class="light-card card-a"></div>
+        <div class="light-card card-b"></div>
+        <div class="dependency-node node-1"></div>
+        <div class="dependency-node node-2"></div>
+        <div class="dependency-node node-3"></div>
+        <div class="backplate"></div>
+
+        <div class="lockup">
+          <div class="shield-stack" id="shieldStack" aria-hidden="true">
+            <div class="shield-gloss"></div>
+            <div class="bolt-glow">
+              <svg viewBox="0 0 280 340" role="presentation">
+                <path d="M126 70 L190 70 L163 143 L205 143 L111 284 L130 178 L80 178 Z"></path>
+              </svg>
+            </div>
+            <div class="bolt-cut">
+              <svg viewBox="0 0 280 340" role="presentation">
+                <defs>
+                  <linearGradient id="boltGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#eb10b7"></stop>
+                    <stop offset="0.52" stop-color="#bc1cc5"></stop>
+                    <stop offset="1" stop-color="#8733d6"></stop>
+                  </linearGradient>
+                </defs>
+                <path d="M126 70 L190 70 L163 143 L205 143 L111 284 L130 178 L80 178 Z"></path>
+              </svg>
+            </div>
+          </div>
+
+          <div class="wordmark" id="wordmark" aria-label="Socket socket.dev">
+            <div class="word-depth" style="transform: translateZ(0px) translate(20px, 20px);">Socket</div>
+            <div class="word-depth" style="transform: translateZ(12px) translate(16px, 16px);">Socket</div>
+            <div class="word-depth" style="transform: translateZ(24px) translate(12px, 12px);">Socket</div>
+            <div class="word-depth" style="transform: translateZ(36px) translate(8px, 8px);">Socket</div>
+            <div class="word-depth" style="transform: translateZ(48px) translate(4px, 4px);">Socket</div>
+            <div class="word-front">Socket</div>
+            <div class="word-shine"></div>
+
+            <div class="domain-depth" style="transform: translateZ(8px) translate(12px, 12px);">socket.dev</div>
+            <div class="domain-depth" style="transform: translateZ(24px) translate(8px, 8px);">socket.dev</div>
+            <div class="domain-depth" style="transform: translateZ(40px) translate(4px, 4px);">socket.dev</div>
+            <div class="domain-front">socket.dev</div>
+            <div class="domain-shine"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="hint">Drag to orbit. Tune the motion deck.</div>
+    <div class="controls" aria-label="Scene controls">
+      <div class="control-actions">
+        <button class="control-button" id="resetButton" type="button">Front</button>
+        <button class="control-button" id="spinButton" type="button">Spin</button>
+      </div>
+
+      <div class="control-column">
+        <label class="control-group">
+          <span>Speed</span>
+          <input id="speedRange" type="range" min="12" max="220" value="72" step="1" aria-label="Spin speed">
+          <output id="speedValue" for="speedRange">72%</output>
+        </label>
+        <div class="quick-row" aria-label="Speed presets">
+          <button class="quick-button" type="button" data-speed="40">Slow</button>
+          <button class="quick-button" type="button" data-speed="72">Show</button>
+          <button class="quick-button" type="button" data-speed="130">Fast</button>
+        </div>
+        <label class="control-group">
+          <span>Sweep</span>
+          <input id="arcRange" type="range" min="4" max="38" value="18" step="1" aria-label="Spin sweep">
+          <output id="arcValue" for="arcRange">18 deg</output>
+        </label>
+      </div>
+
+      <div class="control-column">
+        <label class="control-group">
+          <span>Zoom</span>
+          <span class="range-wrap">
+            <button class="step-button" id="zoomOutButton" type="button" aria-label="Zoom out">-</button>
+            <input id="zoomRange" type="range" min="-430" max="160" value="-220" step="1" aria-label="Zoom">
+            <button class="step-button" id="zoomInButton" type="button" aria-label="Zoom in">+</button>
+          </span>
+          <output id="zoomValue" for="zoomRange">-220</output>
+        </label>
+        <div class="quick-row" aria-label="Zoom presets">
+          <button class="quick-button" type="button" data-zoom="-320">Wide</button>
+          <button class="quick-button" type="button" data-zoom="-220">Fit</button>
+          <button class="quick-button" type="button" data-zoom="-80">Close</button>
+        </div>
+        <label class="control-group">
+          <span>Tilt</span>
+          <input id="tiltRange" type="range" min="-14" max="8" value="-3" step="1" aria-label="Tilt">
+          <output id="tiltValue" for="tiltRange">-3 deg</output>
+        </label>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const shieldPath = "M140 14 L250 58 L250 166 C250 240 202 298 140 326 C78 298 30 240 30 166 L30 58 Z";
+      const stack = document.getElementById("shieldStack");
+      const edgeCount = 18;
+
+      for (let i = edgeCount; i >= 0; i -= 1) {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 280 340");
+        svg.setAttribute("class", i === 0 ? "shield-layer shield-face" : "shield-layer shield-edge");
+        svg.style.setProperty("--depth", `${86 - i * 5}px`);
+        const depthMix = i / edgeCount;
+        const alpha = 0.36 + (1 - depthMix) * 0.33;
+        svg.style.setProperty("--fill", i === 0 ? "#fff" : `rgba(255, ${210 + Math.round(35 * (1 - depthMix))}, 255, ${alpha.toFixed(2)})`);
+        svg.style.setProperty("--stroke", i === 0 ? ".55" : ".1");
+        svg.style.setProperty("--strokeWidth", i === 0 ? "4" : "2");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", shieldPath);
+        svg.appendChild(path);
+        stack.prepend(svg);
+      }
+
+      const viewer = document.getElementById("viewer");
+      const rig = document.getElementById("rig");
+      const resetButton = document.getElementById("resetButton");
+      const spinButton = document.getElementById("spinButton");
+      const zoomRange = document.getElementById("zoomRange");
+      const speedRange = document.getElementById("speedRange");
+      const arcRange = document.getElementById("arcRange");
+      const tiltRange = document.getElementById("tiltRange");
+      const zoomValue = document.getElementById("zoomValue");
+      const speedValue = document.getElementById("speedValue");
+      const arcValue = document.getElementById("arcValue");
+      const tiltValue = document.getElementById("tiltValue");
+      const zoomOutButton = document.getElementById("zoomOutButton");
+      const zoomInButton = document.getElementById("zoomInButton");
+      const controls = document.querySelector(".controls");
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      function defaultZoom() {
+        return window.innerWidth < 760 ? -150 : -220;
+      }
+
+      function defaultPose() {
+        return { rx: Number(tiltRange.value), ry: 0 };
+      }
+
+      const initialPose = defaultPose();
+      const initialZoom = defaultZoom();
+      const state = {
+        rx: initialPose.rx,
+        ry: initialPose.ry,
+        targetRx: initialPose.rx,
+        targetRy: initialPose.ry,
+        velocityX: 0,
+        velocityY: 0,
+        zoom: initialZoom,
+        dragging: false,
+        spinning: true,
+        spinSpeed: Number(speedRange.value) / 100,
+        spinCurrent: 0,
+        spinPhase: 0,
+        spinArc: Number(arcRange.value),
+        lastX: 0,
+        lastY: 0,
+        lastTime: performance.now()
+      };
+      zoomRange.value = String(initialZoom);
+      spinButton.textContent = state.spinning ? "Pause" : "Spin";
+      spinButton.setAttribute("aria-pressed", state.spinning ? "true" : "false");
+
+      function applyTransform() {
+        document.documentElement.style.setProperty("--rx", `${state.rx.toFixed(2)}deg`);
+        document.documentElement.style.setProperty("--ry", `${state.ry.toFixed(2)}deg`);
+        document.documentElement.style.setProperty("--zoom", `${state.zoom.toFixed(0)}px`);
+      }
+
+      function updateReadouts() {
+        speedValue.textContent = `${Math.round(state.spinSpeed * 100)}%`;
+        zoomValue.textContent = `${Math.round(state.zoom)}`;
+        arcValue.textContent = `${Math.round(state.spinArc)} deg`;
+        tiltValue.textContent = `${Math.round(Number(tiltRange.value))} deg`;
+      }
+
+      function setZoom(value) {
+        state.zoom = clamp(value, Number(zoomRange.min), Number(zoomRange.max));
+        zoomRange.value = String(Math.round(state.zoom));
+        updateReadouts();
+        applyTransform();
+      }
+
+      function setSpeed(value) {
+        state.spinSpeed = clamp(value, Number(speedRange.min), Number(speedRange.max)) / 100;
+        speedRange.value = String(Math.round(state.spinSpeed * 100));
+        updateReadouts();
+        if (!state.spinning) setSpinActive(true);
+      }
+
+      function setArc(value) {
+        state.spinArc = clamp(value, Number(arcRange.min), Number(arcRange.max));
+        arcRange.value = String(Math.round(state.spinArc));
+        updateReadouts();
+      }
+
+      function setTilt(value) {
+        tiltRange.value = String(Math.round(clamp(value, Number(tiltRange.min), Number(tiltRange.max))));
+        updateReadouts();
+      }
+
+      function pointerPoint(event) {
+        const p = event.touches ? event.touches[0] : event;
+        return { x: p.clientX, y: p.clientY };
+      }
+
+      viewer.addEventListener("pointerdown", (event) => {
+        if (event.target.closest(".controls")) return;
+        state.dragging = true;
+        state.spinning = false;
+        spinButton.textContent = "Spin";
+        spinButton.setAttribute("aria-pressed", "false");
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        viewer.setPointerCapture(event.pointerId);
+      });
+
+      viewer.addEventListener("pointermove", (event) => {
+        if (!state.dragging) return;
+        const dx = event.clientX - state.lastX;
+        const dy = event.clientY - state.lastY;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        state.targetRy += dx * .28;
+        state.targetRx = clamp(state.targetRx - dy * .22, -58, 32);
+        state.velocityY = dx * .08;
+        state.velocityX = -dy * .06;
+      });
+
+      viewer.addEventListener("pointerup", (event) => {
+        state.dragging = false;
+        try {
+          viewer.releasePointerCapture(event.pointerId);
+        } catch (_) {}
+      });
+
+      viewer.addEventListener("pointercancel", () => {
+        state.dragging = false;
+      });
+
+      viewer.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        setZoom(state.zoom - event.deltaY * .28);
+      }, { passive: false });
+
+      for (const eventName of ["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"]) {
+        controls.addEventListener(eventName, (event) => {
+          event.stopPropagation();
+        }, { passive: eventName !== "wheel" });
+      }
+
+      zoomRange.addEventListener("input", () => {
+        setZoom(Number(zoomRange.value));
+      });
+
+      speedRange.addEventListener("input", () => {
+        setSpeed(Number(speedRange.value));
+      });
+
+      arcRange.addEventListener("input", () => {
+        setArc(Number(arcRange.value));
+      });
+
+      tiltRange.addEventListener("input", () => {
+        setTilt(Number(tiltRange.value));
+      });
+
+      zoomOutButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setZoom(state.zoom - 35);
+      });
+
+      zoomInButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setZoom(state.zoom + 35);
+      });
+
+      document.querySelectorAll("[data-speed]").forEach((button) => {
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setSpeed(Number(button.dataset.speed));
+        });
+      });
+
+      document.querySelectorAll("[data-zoom]").forEach((button) => {
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setZoom(Number(button.dataset.zoom));
+        });
+      });
+
+      function resetScene() {
+        const pose = defaultPose();
+        state.targetRx = pose.rx;
+        state.targetRy = pose.ry;
+        state.spinPhase = 0;
+        state.velocityX = 0;
+        state.velocityY = 0;
+        setZoom(defaultZoom());
+      }
+
+      function setSpinActive(active) {
+        state.spinning = active;
+        spinButton.textContent = state.spinning ? "Pause" : "Spin";
+        spinButton.setAttribute("aria-pressed", state.spinning ? "true" : "false");
+        if (state.spinning) {
+          state.velocityX = 0;
+          state.velocityY = 0;
+          state.spinPhase = 0;
+          state.targetRy = defaultPose().ry;
+        }
+      }
+
+      function toggleSpin() {
+        setSpinActive(!state.spinning);
+      }
+
+      let spinPointerHandled = false;
+      resetButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        resetScene();
+      });
+
+      resetButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      spinButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        spinPointerHandled = true;
+        toggleSpin();
+        setTimeout(() => {
+          spinPointerHandled = false;
+        }, 350);
+      });
+
+      spinButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!spinPointerHandled) toggleSpin();
+      });
+
+      function animate() {
+        const now = performance.now();
+        const dt = Math.min(32, now - state.lastTime) / 16.67;
+        state.lastTime = now;
+
+        if (!state.dragging && state.spinning) {
+          const pose = defaultPose();
+          const pitchWave = Math.sin(now * .0011) * 1.25 + Math.sin(now * .00047) * .7;
+          const speedBreath = .88 + (Math.sin(now * .00052) + 1) * .05;
+          state.spinCurrent += (state.spinSpeed - state.spinCurrent) * .035;
+          state.spinPhase += .0135 * speedBreath * state.spinCurrent * dt;
+          const frontBiasedYaw = pose.ry - Math.sin(state.spinPhase) * state.spinArc;
+          state.targetRx += (clamp(pose.rx + pitchWave, -14, 8) - state.targetRx) * .045;
+          state.targetRy += (frontBiasedYaw - state.targetRy) * .085;
+          state.velocityX *= .82;
+          state.velocityY *= .82;
+        } else if (!state.dragging) {
+          state.targetRx = clamp(state.targetRx + state.velocityX * dt, -58, 32);
+          state.targetRy += state.velocityY * dt;
+          state.velocityX *= .94;
+          state.velocityY *= .94;
+        }
+
+        state.rx += (state.targetRx - state.rx) * .12;
+        state.ry += (state.targetRy - state.ry) * .12;
+        applyTransform();
+        requestAnimationFrame(animate);
+      }
+
+      updateReadouts();
+      applyTransform();
+      animate();
+
+      window.socketScene = {
+        getState() {
+          return {
+            rx: Number(state.rx.toFixed(2)),
+            ry: Number(state.ry.toFixed(2)),
+            zoom: Number(state.zoom.toFixed(0)),
+            spinning: state.spinning
+          };
+        },
+        setRotation(rx, ry) {
+          state.targetRx = clamp(rx, -58, 32);
+          state.targetRy = ry;
+        },
+        reset() {
+          resetButton.click();
+        }
+      };
+
+      const canvas = document.getElementById("sparkCanvas");
+      const ctx = canvas.getContext("2d");
+      const sparks = Array.from({ length: 86 }, (_, i) => ({
+        t: Math.random() * Math.PI * 2,
+        r: 120 + Math.random() * 420,
+        speed: .003 + Math.random() * .008,
+        size: .7 + Math.random() * 2.8,
+        phase: i * .43
+      }));
+
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(window.innerWidth * dpr);
+        canvas.height = Math.round(window.innerHeight * dpr);
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      function drawSparks(time) {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        const cx = window.innerWidth * .38;
+        const cy = window.innerHeight * .48;
+
+        for (const spark of sparks) {
+          const angle = spark.t + time * spark.speed;
+          const pulse = Math.sin(time * .002 + spark.phase) * .5 + .5;
+          const x = cx + Math.cos(angle) * spark.r * (window.innerWidth < 760 ? .48 : .74);
+          const y = cy + Math.sin(angle * 1.18) * spark.r * .33;
+          const alpha = .12 + pulse * .64;
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.shadowColor = "rgba(255, 45, 211, .88)";
+          ctx.shadowBlur = 18;
+          ctx.arc(x, y, spark.size, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (spark.size > 1.7 && pulse > .68) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * .34})`;
+            ctx.lineWidth = 1;
+            ctx.moveTo(x, y);
+            ctx.lineTo(cx + (x - cx) * .82, cy + (y - cy) * .82);
+            ctx.stroke();
+          }
+        }
+
+        requestAnimationFrame(drawSparks);
+      }
+
+      drawSparks(performance.now());
+    })();
+  </script>
+</body>
+</html>
